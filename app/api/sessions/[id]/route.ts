@@ -1,15 +1,12 @@
-// app/api/sessions/[id]/route.ts
-// Get or delete a specific session
-
 import { createServerClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
-// GET - Fetch session details with all students enrolled
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createServerClient();
     
     const { data: session, error } = await supabase
@@ -24,7 +21,7 @@ export async function GET(
           student:users!registrations_student_id_fkey(id, name, email, grade, homeroom)
         )
       `)
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (error) {
@@ -38,43 +35,39 @@ export async function GET(
   }
 }
 
-// DELETE - Remove a session (teacher or admin only)
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createServerClient();
     
-    // Check authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get user role
     const { data: userData } = await supabase
       .from('users')
       .select('role')
       .eq('id', user.id)
       .single();
 
-    // Check if user is teacher who owns session or admin
     const { data: session } = await supabase
       .from('sessions')
       .select('teacher_id')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (!session || (session.teacher_id !== user.id && userData?.role !== 'admin')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Delete session (cascade will handle registrations)
     const { error: deleteError } = await supabase
       .from('sessions')
       .delete()
-      .eq('id', params.id);
+      .eq('id', id);
 
     if (deleteError) {
       return NextResponse.json({ error: deleteError.message }, { status: 400 });
