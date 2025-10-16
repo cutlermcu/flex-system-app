@@ -269,7 +269,7 @@ export default function AdminDashboard() {
             onRoleFilterChange={setRoleFilter}
             onDelete={deleteUser}
             onRefresh={loadUsers}
-            onEdit={(user) => {
+            onEdit={(user: any) => {
               setEditingUser(user);
               setShowEditUserModal(true);
             }}
