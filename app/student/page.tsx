@@ -323,13 +323,13 @@ export default function StudentDashboard() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
                             <span className="font-semibold text-gray-900">
-                              {flexDate.my_registration.session.title}
+                            {flexDate.my_registration?.session.title}
                             </span>
                           </div>
                           <div className="flex items-center gap-4 text-sm text-gray-600 ml-7">
-                            <span>Room {flexDate.my_registration.session.room_number}</span>
+                            <span>Room {flexDate.my_registration?.session.room_number}</span>
                             <span>•</span>
-                            <span>{flexDate.my_registration.session.teacher.name}</span>
+                            <span>{flexDate.my_registration?.session.teacher.name}</span>
                             {isLocked && (
                               <>
                                 <span>•</span>
