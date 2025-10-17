@@ -285,7 +285,7 @@ export default function TeacherDashboard() {
             flexDates={flexDates}
             onCreateNew={() => setShowCreateSessionModal(true)}
             onDelete={deleteSession}
-            onViewRoster={(session) => {
+            onViewRoster={(session: any) => {
               setSelectedSession(session);
               setShowRosterModal(true);
             }}
