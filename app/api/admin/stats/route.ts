@@ -41,11 +41,6 @@ export async function GET() {
       .select('*', { count: 'exact', head: true })
       .eq('role', 'teacher');
 
-    const { count: admins } = await adminClient
-      .from('users')
-      .select('*', { count: 'exact', head: true })
-      .eq('role', 'admin');
-
     // Get upcoming flex dates (next 30 days)
     const today = new Date().toISOString().split('T')[0];
     const thirtyDaysLater = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -56,12 +51,67 @@ export async function GET() {
       .gte('date', today)
       .lte('date', thirtyDaysLater);
 
+    // Get session stats
+    const { data: sessions } = await adminClient
+      .from('sessions')
+      .select('id, capacity, date')
+      .gte('date', today);
+
+    let overCapacity = 0;
+    let emptySessions = 0;
+
+    if (sessions) {
+      for (const session of sessions) {
+        const { count: enrolled } = await adminClient
+          .from('registrations')
+          .select('*', { count: 'exact', head: true })
+          .eq('session_id', session.id);
+
+        if (enrolled && enrolled > session.capacity) {
+          overCapacity++;
+        }
+        if (enrolled === 0) {
+          emptySessions++;
+        }
+      }
+    }
+
+    // Get students without selections for the next flex date
+    const { data: nextFlexDate } = await adminClient
+      .from('flex_dates')
+      .select('date')
+      .gte('date', today)
+      .order('date', { ascending: true })
+      .limit(1)
+      .single();
+
+    let studentsWithoutSelection = 0;
+    if (nextFlexDate) {
+      const { data: registrations } = await adminClient
+        .from('registrations')
+        .select('student_id')
+        .eq('date', nextFlexDate.date);
+
+      const registeredStudentIds = new Set(registrations?.map(r => r.student_id) || []);
+      studentsWithoutSelection = (students || 0) - registeredStudentIds.size;
+    }
+
     return NextResponse.json({
-      total: total || 0,
-      students: students || 0,
-      teachers: teachers || 0,
-      admins: admins || 0,
-      upcomingFlexDates: upcomingFlexDates || 0,
+      users: {
+        total: total || 0,
+        students: students || 0,
+        teachers: teachers || 0,
+      },
+      flex_dates: {
+        upcoming: upcomingFlexDates || 0,
+      },
+      sessions: {
+        over_capacity: overCapacity,
+        empty: emptySessions,
+      },
+      registrations: {
+        students_without_selection: studentsWithoutSelection,
+      },
     });
   } catch (error) {
     console.error('Error fetching stats:', error);
