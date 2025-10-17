@@ -27,55 +27,41 @@ export async function GET() {
     const adminClient = createAdminClient();
 
     // Get user counts
-    const { count: totalUsers } = await adminClient
+    const { count: total } = await adminClient
       .from('users')
       .select('*', { count: 'exact', head: true });
 
-    const { count: studentCount } = await adminClient
+    const { count: students } = await adminClient
       .from('users')
       .select('*', { count: 'exact', head: true })
       .eq('role', 'student');
 
-    const { count: teacherCount } = await adminClient
+    const { count: teachers } = await adminClient
       .from('users')
       .select('*', { count: 'exact', head: true })
       .eq('role', 'teacher');
 
-    // Get upcoming flex dates
+    const { count: admins } = await adminClient
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .eq('role', 'admin');
+
+    // Get upcoming flex dates (next 30 days)
     const today = new Date().toISOString().split('T')[0];
+    const thirtyDaysLater = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    
     const { count: upcomingFlexDates } = await adminClient
       .from('flex_dates')
       .select('*', { count: 'exact', head: true })
-      .gte('date', today);
-
-    // Get students without selections for upcoming dates
-    const { data: upcomingDates } = await adminClient
-      .from('flex_dates')
-      .select('date')
       .gte('date', today)
-      .lte('date', new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
-
-    let studentsWithoutSelections = 0;
-    if (upcomingDates && upcomingDates.length > 0) {
-      for (const flexDate of upcomingDates) {
-        const { data: registrations } = await adminClient
-          .from('registrations')
-          .select('student_id')
-          .eq('date', flexDate.date);
-
-        const registeredStudentIds = new Set(registrations?.map(r => r.student_id) || []);
-        studentsWithoutSelections += (studentCount || 0) - registeredStudentIds.size;
-      }
-    }
+      .lte('date', thirtyDaysLater);
 
     return NextResponse.json({
-      stats: {
-        totalUsers: totalUsers || 0,
-        studentCount: studentCount || 0,
-        teacherCount: teacherCount || 0,
-        upcomingFlexDates: upcomingFlexDates || 0,
-        studentsWithoutSelections,
-      },
+      total: total || 0,
+      students: students || 0,
+      teachers: teachers || 0,
+      admins: admins || 0,
+      upcomingFlexDates: upcomingFlexDates || 0,
     });
   } catch (error) {
     console.error('Error fetching stats:', error);
