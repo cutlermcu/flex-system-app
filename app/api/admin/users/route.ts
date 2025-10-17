@@ -1,5 +1,5 @@
 // app/api/admin/users/route.ts
-// Admin endpoints for user management
+// List all users and create new ones
 
 import { createServerClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -25,25 +25,22 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Get query params for filtering
+    const adminClient = createAdminClient();
     const { searchParams } = new URL(request.url);
-    const role = searchParams.get('role');
-    const search = searchParams.get('search');
+    const roleFilter = searchParams.get('role');
+    const searchQuery = searchParams.get('search');
 
-    // Build query
-    let query = supabase
+    let query = adminClient
       .from('users')
       .select('*')
       .order('name', { ascending: true });
 
-    // Filter by role
-    if (role && ['student', 'teacher', 'admin'].includes(role)) {
-      query = query.eq('role', role);
+    if (roleFilter) {
+      query = query.eq('role', roleFilter);
     }
 
-    // Search by name or email
-    if (search) {
-      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+    if (searchQuery) {
+      query = query.or(`name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
     }
 
     const { data: users, error } = await query;
@@ -52,14 +49,14 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    return NextResponse.json({ users: users || [] });
+    return NextResponse.json({ users });
   } catch (error) {
     console.error('Error fetching users:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
-// POST - Create new user (admin only)
+// POST - Create new user
 export async function POST(request: Request) {
   try {
     const supabase = await createServerClient();
@@ -88,39 +85,55 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    if (!['student', 'teacher', 'admin'].includes(role)) {
-      return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
-    }
-
     if (role === 'student' && !grade) {
       return NextResponse.json({ error: 'Grade required for students' }, { status: 400 });
     }
 
-    // Check if user already exists
-    const { data: existing } = await adminClient
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .single();
+    // Create user in auth
+    const { data: authUser, error: authError2 } = await adminClient.auth.admin.createUser({
+      email,
+      email_confirm: true,
+    });
 
-    if (existing) {
-      return NextResponse.json({ error: 'User with this email already exists' }, { status: 400 });
+    if (authError2) {
+      return NextResponse.json({ error: authError2.message }, { status: 400 });
     }
 
-    // IMPORTANT: Users must sign in with Google OAuth first before we can create their record
-    // We cannot create user records without a valid auth.users ID
-    // This is a limitation of Supabase's auth system
-    
-    return NextResponse.json({ 
-      error: 'User creation via admin panel is not supported. Users must sign in with Google OAuth first, then you can update their role/grade.',
-      info: 'Have the user visit the login page and sign in with Google. Their account will be created automatically, then you can edit their role here.'
-    }, { status: 400 });
+    // Create user record
+    const userData2: any = {
+      id: authUser.user.id,
+      email,
+      name,
+      role,
+    };
 
-    // NOTE: If you want to enable this feature, you need to:
-    // 1. Use Supabase Admin API to create auth.users record first
-    // 2. Then create the users table record with that ID
-    // This requires the service role key and additional setup
+    if (role === 'student') {
+      userData2.grade = grade;
+      userData2.homeroom = homeroom;
+    }
 
+    const { data: newUser, error: insertError } = await adminClient
+      .from('users')
+      .insert(userData2)
+      .select()
+      .single();
+
+    if (insertError) {
+      // Rollback auth user if database insert fails
+      await adminClient.auth.admin.deleteUser(authUser.user.id);
+      return NextResponse.json({ error: insertError.message }, { status: 400 });
+    }
+
+    // Log audit
+    await adminClient
+      .from('audit_log')
+      .insert({
+        user_id: user.id,
+        action: 'create_user',
+        details: { new_user_id: newUser.id, email, role },
+      });
+
+    return NextResponse.json({ success: true, user: newUser });
   } catch (error) {
     console.error('Error creating user:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
