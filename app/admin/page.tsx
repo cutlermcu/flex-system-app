@@ -543,9 +543,532 @@ function UsersTab({ users, searchTerm, roleFilter, onSearchChange, onRoleFilterC
 
 // Sessions Tab Component
 function SessionsTab() {
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [filteredSessions, setFilteredSessions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dateFilter, setDateFilter] = useState('all');
+  const [teacherFilter, setTeacherFilter] = useState('all');
+  const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set());
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingSession, setEditingSession] = useState<any>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<'single' | 'bulk'>('single');
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    fetchSessions();
+  }, []);
+
+  useEffect(() => {
+    applyFilters();
+  }, [sessions, searchTerm, dateFilter, teacherFilter]);
+
+  async function fetchSessions() {
+    setLoading(true);
+    try {
+      // Fetch sessions with related data and enrollment counts
+      const { data, error } = await supabase
+        .from('sessions')
+        .select(`
+          *,
+          flex_date:flex_dates(date, period),
+          teacher:users!sessions_teacher_id_fkey(name, email),
+          registrations(count)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Process the data to include enrollment counts
+      const processedSessions = data.map((session: any) => ({
+        ...session,
+        enrollment_count: session.registrations?.[0]?.count || 0
+      }));
+
+      setSessions(processedSessions);
+    } catch (error) {
+      console.error('Error fetching sessions:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function applyFilters() {
+    let filtered = [...sessions];
+
+    // Search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (s) =>
+          s.title.toLowerCase().includes(term) ||
+          s.description?.toLowerCase().includes(term) ||
+          s.room.toLowerCase().includes(term) ||
+          s.teacher?.name.toLowerCase().includes(term)
+      );
+    }
+
+    // Date filter
+    if (dateFilter !== 'all') {
+      filtered = filtered.filter((s) => s.flex_date_id === dateFilter);
+    }
+
+    // Teacher filter
+    if (teacherFilter !== 'all') {
+      filtered = filtered.filter((s) => s.teacher_id === teacherFilter);
+    }
+
+    setFilteredSessions(filtered);
+  }
+
+  function handleSelectAll(checked: boolean) {
+    if (checked) {
+      setSelectedSessions(new Set(filteredSessions.map((s) => s.id)));
+    } else {
+      setSelectedSessions(new Set());
+    }
+  }
+
+  function handleSelectSession(sessionId: string, checked: boolean) {
+    const newSelected = new Set(selectedSessions);
+    if (checked) {
+      newSelected.add(sessionId);
+    } else {
+      newSelected.delete(sessionId);
+    }
+    setSelectedSessions(newSelected);
+  }
+
+  function openEditModal(session: any) {
+    setEditingSession(session);
+    setShowEditModal(true);
+  }
+
+  function closeEditModal() {
+    setEditingSession(null);
+    setShowEditModal(false);
+  }
+
+  async function handleUpdateSession(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingSession) return;
+
+    try {
+      const { error } = await supabase
+        .from('sessions')
+        .update({
+          title: editingSession.title,
+          description: editingSession.description,
+          room: editingSession.room,
+          capacity: editingSession.capacity
+        })
+        .eq('id', editingSession.id);
+
+      if (error) throw error;
+
+      await fetchSessions();
+      closeEditModal();
+    } catch (error) {
+      console.error('Error updating session:', error);
+      alert('Failed to update session');
+    }
+  }
+
+  async function handleDeleteSingle(sessionId: string) {
+    try {
+      const { error } = await supabase
+        .from('sessions')
+        .delete()
+        .eq('id', sessionId);
+
+      if (error) throw error;
+
+      await fetchSessions();
+      setShowDeleteConfirm(false);
+      setEditingSession(null);
+    } catch (error) {
+      console.error('Error deleting session:', error);
+      alert('Failed to delete session');
+    }
+  }
+
+  async function handleBulkDelete() {
+    try {
+      const { error } = await supabase
+        .from('sessions')
+        .delete()
+        .in('id', Array.from(selectedSessions));
+
+      if (error) throw error;
+
+      await fetchSessions();
+      setSelectedSessions(new Set());
+      setShowDeleteConfirm(false);
+    } catch (error) {
+      console.error('Error deleting sessions:', error);
+      alert('Failed to delete sessions');
+    }
+  }
+
+  // Get unique dates and teachers for filters
+  const uniqueDates = Array.from(
+    new Set(sessions.map((s) => s.flex_date_id))
+  ).map((id) => {
+    const session = sessions.find((s) => s.flex_date_id === id);
+    return {
+      id,
+      date: session?.flex_date?.date || '',
+      period: session?.flex_date?.period || ''
+    };
+  });
+
+  const uniqueTeachers = Array.from(
+    new Set(sessions.map((s) => s.teacher_id))
+  ).map((id) => {
+    const session = sessions.find((s) => s.teacher_id === id);
+    return {
+      id,
+      name: session?.teacher?.name || 'Unknown'
+    };
+  });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Loading sessions...</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-      <p className="text-gray-600">Sessions overview coming soon...</p>
+    <div className="space-y-6">
+      {/* Header with Search and Filters */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder="Search sessions by title, description, room, or teacher..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <div className="flex gap-3">
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="all">All Dates</option>
+              {uniqueDates.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {new Date(d.date).toLocaleDateString()} - {d.period}
+                </option>
+              ))}
+            </select>
+            <select
+              value={teacherFilter}
+              onChange={(e) => setTeacherFilter(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="all">All Teachers</option>
+              {uniqueTeachers.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Bulk Actions */}
+        {selectedSessions.size > 0 && (
+          <div className="mt-4 p-4 bg-blue-50 rounded-lg flex items-center justify-between">
+            <span className="text-blue-700 font-medium">
+              {selectedSessions.size} session(s) selected
+            </span>
+            <button
+              onClick={() => {
+                setDeleteTarget('bulk');
+                setShowDeleteConfirm(true);
+              }}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Delete Selected
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Sessions Table */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="px-6 py-3 text-left">
+                  <input
+                    type="checkbox"
+                    checked={
+                      filteredSessions.length > 0 &&
+                      selectedSessions.size === filteredSessions.length
+                    }
+                    onChange={(e) => handleSelectAll(e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Session
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Date & Period
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Teacher
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Room
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Enrollment
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredSessions.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                    No sessions found
+                  </td>
+                </tr>
+              ) : (
+                filteredSessions.map((session) => {
+                  const enrollmentPercent =
+                    (session.enrollment_count / session.capacity) * 100;
+                  const isOverCapacity = session.enrollment_count > session.capacity;
+                  const isNearCapacity = enrollmentPercent >= 90 && !isOverCapacity;
+
+                  return (
+                    <tr key={session.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedSessions.has(session.id)}
+                          onChange={(e) =>
+                            handleSelectSession(session.id, e.target.checked)
+                          }
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900">
+                          {session.title}
+                        </div>
+                        {session.description && (
+                          <div className="text-sm text-gray-500 mt-1">
+                            {session.description.substring(0, 60)}
+                            {session.description.length > 60 && '...'}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {session.flex_date && (
+                          <>
+                            <div>
+                              {new Date(session.flex_date.date).toLocaleDateString()}
+                            </div>
+                            <div className="text-gray-500">{session.flex_date.period}</div>
+                          </>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {session.teacher?.name || 'Unknown'}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {session.room}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-sm font-medium ${
+                              isOverCapacity
+                                ? 'text-red-600'
+                                : isNearCapacity
+                                ? 'text-yellow-600'
+                                : 'text-gray-900'
+                            }`}
+                          >
+                            {session.enrollment_count} / {session.capacity}
+                          </span>
+                          {isOverCapacity && (
+                            <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded">
+                              Over Capacity
+                            </span>
+                          )}
+                          {isNearCapacity && (
+                            <span className="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded">
+                              Nearly Full
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => openEditModal(session)}
+                            className="text-blue-600 hover:text-blue-800 font-medium"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingSession(session);
+                              setDeleteTarget('single');
+                              setShowDeleteConfirm(true);
+                            }}
+                            className="text-red-600 hover:text-red-800 font-medium"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Edit Modal */}
+      {showEditModal && editingSession && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Edit Session</h3>
+            <form onSubmit={handleUpdateSession} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Title
+                </label>
+                <input
+                  type="text"
+                  value={editingSession.title}
+                  onChange={(e) =>
+                    setEditingSession({ ...editingSession, title: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={editingSession.description || ''}
+                  onChange={(e) =>
+                    setEditingSession({
+                      ...editingSession,
+                      description: e.target.value
+                    })
+                  }
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Room
+                </label>
+                <input
+                  type="text"
+                  value={editingSession.room}
+                  onChange={(e) =>
+                    setEditingSession({ ...editingSession, room: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Capacity
+                </label>
+                <input
+                  type="number"
+                  value={editingSession.capacity}
+                  onChange={(e) =>
+                    setEditingSession({
+                      ...editingSession,
+                      capacity: parseInt(e.target.value)
+                    })
+                  }
+                  min="1"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={closeEditModal}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Confirm Delete</h3>
+            <p className="text-gray-600 mb-6">
+              {deleteTarget === 'single'
+                ? `Are you sure you want to delete "${editingSession?.title}"? This will also remove all student registrations for this session.`
+                : `Are you sure you want to delete ${selectedSessions.size} session(s)? This will also remove all associated student registrations.`}
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setEditingSession(null);
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() =>
+                  deleteTarget === 'single'
+                    ? handleDeleteSingle(editingSession!.id)
+                    : handleBulkDelete()
+                }
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
