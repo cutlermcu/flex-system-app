@@ -119,10 +119,15 @@ export default function TeacherDashboard() {
 
   async function loadFlexDates() {
     try {
+      console.log('Loading flex dates...');
       const response = await fetch('/api/flex-dates/upcoming');
       const data = await response.json();
+      console.log('Flex dates response:', data);
       if (response.ok) {
         setFlexDates(data.flexDates || []);
+        console.log('Flex dates set:', data.flexDates || []);
+      } else {
+        console.error('Failed to load flex dates:', data);
       }
     } catch (error) {
       console.error('Error loading flex dates:', error);
@@ -570,7 +575,7 @@ function CalendarTab({ sessions }: any) {
 // Create Session Modal
 function CreateSessionModal({ teacherId, flexDates, templates, onClose, onSuccess }: any) {
   const [formData, setFormData] = useState({
-    date: '',
+    flex_date_id: '', // Changed from 'date' to 'flex_date_id'
     room_number: '',
     capacity: 20,
     title: '',
@@ -673,13 +678,13 @@ function CreateSessionModal({ teacherId, flexDates, templates, onClose, onSucces
             <label className="block text-sm font-medium text-gray-700 mb-1">Flex Date *</label>
             <select
               required
-              value={formData.date}
-              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+              value={formData.flex_date_id}
+              onChange={(e) => setFormData({ ...formData, flex_date_id: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-600"
             >
               <option value="">Select a date</option>
               {flexDates.map((fd: any) => (
-                <option key={fd.id} value={fd.date}>
+                <option key={fd.id} value={fd.id}>
                   {new Date(fd.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} - {fd.flex_type}
                 </option>
               ))}
