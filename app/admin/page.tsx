@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import RoleSwitcher from '@/components/RoleSwitcher';
 
 type Tab = 'overview' | 'flex-dates' | 'users' | 'sessions';
 
@@ -207,6 +208,7 @@ export default function AdminDashboard() {
             <h1 className="text-xl font-semibold text-gray-900">Admin Dashboard</h1>
           </div>
           <div className="flex items-center gap-4">
+            <RoleSwitcher currentRole="admin" userId={user?.id} />
             <div className="text-right">
               <p className="text-sm font-medium text-gray-900">{user?.name}</p>
               <p className="text-xs text-gray-600">Administrator</p>

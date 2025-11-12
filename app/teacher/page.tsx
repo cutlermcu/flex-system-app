@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import RoleSwitcher from '@/components/RoleSwitcher';
 
 type Tab = 'sessions' | 'templates' | 'calendar';
 
@@ -229,6 +230,7 @@ export default function TeacherDashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
+      <RoleSwitcher currentRole="teacher" userId={user?.id} />
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
