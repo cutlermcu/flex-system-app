@@ -28,9 +28,8 @@ export default function RoleSwitcher({ currentRole, userId }: RoleSwitcherProps)
 
       if (error) throw error;
 
-      // Redirect to the new role's dashboard
-      router.push(`/${newRole}`);
-      router.refresh();
+      // Force a hard redirect with window.location to ensure fresh data load
+      window.location.href = `/${newRole}`;
     } catch (error) {
       console.error('Error switching role:', error);
       alert('Failed to switch role');
