@@ -42,7 +42,7 @@ export async function GET(request: Request) {
       .from('flex_dates')
       .select(`
         *,
-        sessions!inner(
+        sessions(
           id,
           title,
           room_number,

@@ -575,7 +575,7 @@ function SessionsTab() {
         .from('sessions')
         .select(`
           *,
-          flex_date:flex_dates(date, period),
+          flex_date:flex_dates(date, flex_type),
           teacher:users!sessions_teacher_id_fkey(name, email),
           registrations(count)
         `)
@@ -606,8 +606,8 @@ function SessionsTab() {
       filtered = filtered.filter(
         (s) =>
           s.title.toLowerCase().includes(term) ||
-          s.description?.toLowerCase().includes(term) ||
-          s.room.toLowerCase().includes(term) ||
+          s.long_description?.toLowerCase().includes(term) ||
+          s.room_number?.toLowerCase().includes(term) ||
           s.teacher?.name.toLowerCase().includes(term)
       );
     }
@@ -662,8 +662,8 @@ function SessionsTab() {
         .from('sessions')
         .update({
           title: editingSession.title,
-          description: editingSession.description,
-          room: editingSession.room,
+          long_description: editingSession.long_description,
+          room_number: editingSession.room_number,
           capacity: editingSession.capacity
         })
         .eq('id', editingSession.id);
@@ -722,7 +722,7 @@ function SessionsTab() {
     return {
       id,
       date: session?.flex_date?.date || '',
-      period: session?.flex_date?.period || ''
+      flex_type: session?.flex_date?.flex_type || ''
     };
   });
 
@@ -767,7 +767,7 @@ function SessionsTab() {
               <option value="all">All Dates</option>
               {uniqueDates.map((d) => (
                 <option key={d.id} value={d.id}>
-                  {new Date(d.date).toLocaleDateString()} - {d.period}
+                  {new Date(d.date).toLocaleDateString()} - {d.flex_type}
                 </option>
               ))}
             </select>
@@ -872,10 +872,10 @@ function SessionsTab() {
                         <div className="text-sm font-medium text-gray-900">
                           {session.title}
                         </div>
-                        {session.description && (
+                        {session.long_description && (
                           <div className="text-sm text-gray-500 mt-1">
-                            {session.description.substring(0, 60)}
-                            {session.description.length > 60 && '...'}
+                            {session.long_description.substring(0, 60)}
+                            {session.long_description.length > 60 && '...'}
                           </div>
                         )}
                       </td>
@@ -885,7 +885,7 @@ function SessionsTab() {
                             <div>
                               {new Date(session.flex_date.date).toLocaleDateString()}
                             </div>
-                            <div className="text-gray-500">{session.flex_date.period}</div>
+                            <div className="text-gray-500">{session.flex_date.flex_type}</div>
                           </>
                         )}
                       </td>
@@ -893,7 +893,7 @@ function SessionsTab() {
                         {session.teacher?.name || 'Unknown'}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
-                        {session.room}
+                        {session.room_number}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
@@ -974,11 +974,11 @@ function SessionsTab() {
                   Description
                 </label>
                 <textarea
-                  value={editingSession.description || ''}
+                  value={editingSession.long_description || ''}
                   onChange={(e) =>
                     setEditingSession({
                       ...editingSession,
-                      description: e.target.value
+                      long_description: e.target.value
                     })
                   }
                   rows={3}
@@ -991,9 +991,9 @@ function SessionsTab() {
                 </label>
                 <input
                   type="text"
-                  value={editingSession.room}
+                  value={editingSession.room_number}
                   onChange={(e) =>
-                    setEditingSession({ ...editingSession, room: e.target.value })
+                    setEditingSession({ ...editingSession, room_number: e.target.value })
                   }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required

@@ -27,17 +27,33 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { 
-      date, 
-      room_number, 
-      capacity, 
-      title, 
-      long_description, 
-      allowed_grades, 
-      recurring, 
-      save_as_template, 
-      template_name 
+    const {
+      flex_date_id,
+      date: rawDate,
+      room_number,
+      capacity,
+      title,
+      long_description,
+      allowed_grades,
+      recurring,
+      save_as_template,
+      template_name
     } = body;
+
+    // Resolve date from flex_date_id if provided (teacher UI sends flex_date_id)
+    let date = rawDate;
+    if (!date && flex_date_id) {
+      const { data: flexDate, error: flexDateError } = await supabase
+        .from('flex_dates')
+        .select('date')
+        .eq('id', flex_date_id)
+        .single();
+
+      if (flexDateError || !flexDate) {
+        return NextResponse.json({ error: 'Invalid flex date selected' }, { status: 400 });
+      }
+      date = flexDate.date;
+    }
 
     // Validation
     if (!date || !room_number || !capacity || !title || !allowed_grades || allowed_grades.length === 0) {
