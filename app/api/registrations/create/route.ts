@@ -93,6 +93,7 @@ export async function POST(request: Request) {
       .insert({
         session_id,
         student_id: user.id,
+        date: session.date,
         status: 'selected'
       })
       .select()

@@ -77,6 +77,7 @@ export async function POST(request: Request) {
         .upsert({
           session_id,
           student_id,
+          date: session.date,
           status: 'locked',
           locked_by_teacher_id: user.id
         })

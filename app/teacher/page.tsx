@@ -88,7 +88,7 @@ export default function TeacherDashboard() {
           registrations(
             id,
             status,
-            student:users!registrations_student_id_fkey(name, email, grade)
+            student:users!registrations_student_id_fkey(id, name, email, grade)
           )
         `)
         .eq('teacher_id', user.id)
@@ -170,12 +170,9 @@ export default function TeacherDashboard() {
       });
 
       if (response.ok) {
+        setShowRosterModal(false);
+        setSelectedSession(null);
         await loadSessions();
-        if (selectedSession) {
-          // Reload session details
-          const updated = sessions.find(s => s.id === selectedSession.id);
-          setSelectedSession(updated);
-        }
         alert('Student removed and notified');
       } else {
         const data = await response.json();
@@ -200,11 +197,9 @@ export default function TeacherDashboard() {
       });
 
       if (response.ok) {
+        setShowRosterModal(false);
+        setSelectedSession(null);
         await loadSessions();
-        if (selectedSession) {
-          const updated = sessions.find(s => s.id === selectedSession.id);
-          setSelectedSession(updated);
-        }
         alert('Student locked to session');
       } else {
         const data = await response.json();
